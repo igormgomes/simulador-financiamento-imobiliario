@@ -231,7 +231,7 @@ export default function Simulador() {
           Analisador de Financiamento Imobiliário
         </div>
         <h1 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: '400', margin: '0 0 12px', letterSpacing: '-0.5px' }}>
-          Quitar o financiamento ou manter investido?
+          Quitar o financiamento ou manter o dinheiro investido?
         </h1>
         <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0, fontFamily: 'sans-serif', lineHeight: '1.65', maxWidth: '580px' }}>
           Se você tem o valor equivalente ao saldo do seu financiamento disponível, o que compensa mais: quitar a dívida hoje ou manter o dinheiro investido na Selic pagando as parcelas normalmente? Informe os dados do contrato e simule diferentes trajetórias de juros.
