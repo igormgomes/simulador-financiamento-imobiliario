@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, ReferenceLine,
-} from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 function buildCurve(inicio, fim, mesesHold, total) {
   return Array.from({ length: total }, (_, i) => {
@@ -37,13 +34,10 @@ const LABEL_STYLE = {
 };
 
 export default function Simulador() {
-  // Dados do contrato — editáveis pelo usuário
   const [saldoDevedor, setSaldoDevedor] = useState(300000);
   const [amortizacaoMensal, setAmortizacaoMensal] = useState(2000);
   const [taxaJurosAnual, setTaxaJurosAnual] = useState(7.0);
   const [parcelasRestantes, setParcelasRestantes] = useState(120);
-
-  // Cenário de juros
   const [activePreset, setActivePreset] = useState(1);
   const [selicInicio, setSelicInicio] = useState(14.5);
   const [selicFim, setSelicFim] = useState(9.5);
@@ -103,9 +97,23 @@ export default function Simulador() {
     const selicMedia = selicCurve.reduce((a, b) => a + b, 0) / selicCurve.length;
     const trMedia = trCurve.reduce((a, b) => a + b, 0) / trCurve.length;
 
+    // Fundo bruto: quanto o dinheiro vira sem sacar nada (sem pagar parcelas)
+    let fundoBruto = saldoDevedor;
+    for (let mes = 1; mes <= total; mes++) {
+      const selicAnualMes = selicCurve[mes - 1];
+      const selicMensal = Math.pow(1 + selicAnualMes / 100, 1 / 12) - 1;
+      fundoBruto = fundoBruto * (1 + selicMensal * (1 - ir / 100));
+    }
+
+    const totalParcelasPagas = amortizacaoMensal * total + totalJurosFin;
+    const anos = Math.round(total / 12);
+
     return {
       fundoFinal: fundoInveste,
+      fundoBruto,
       totalJurosFin,
+      totalParcelasPagas,
+      anos,
       vantagem: fundoInveste > 0,
       diferencaFinal: Math.abs(fundoInveste),
       chartData, selicChartData,
@@ -115,44 +123,35 @@ export default function Simulador() {
   }, [saldoDevedor, amortizacaoMensal, taxaJurosAnual, parcelasRestantes, selicInicio, selicFim, trInicio, trFim, mesesHold, ir]);
 
   const vantagem = resultado.vantagem;
-
-  const anoAtual = 2026;
-  const mesCaidaInicio = mesesHold === 0 ? 'imediatamente' : `em ${Math.floor(mesesHold / 12) > 0 ? Math.floor(mesesHold / 12) + ' ano(s) e ' : ''}${mesesHold % 12 > 0 ? mesesHold % 12 + ' meses' : ''}`;
-  const anoCaidaInicio = anoAtual + Math.floor(mesesHold / 12);
+  const anoCaidaInicio = 2026 + Math.floor(mesesHold / 12);
 
   const sliders = [
     {
-      label: 'Selic hoje (% a.a.)',
-      value: selicInicio, set: setSelicInicio, min: 8, max: 18, step: 0.25, color: '#60a5fa',
-      hint: `Taxa básica de juros atual. Quanto maior, mais o seu dinheiro rende investido na renda fixa.`,
+      label: 'Selic hoje (% a.a.)', value: selicInicio, set: setSelicInicio, min: 8, max: 18, step: 0.25, color: '#60a5fa',
+      hint: 'Taxa básica de juros atual. Quanto maior, mais o seu dinheiro rende investido na renda fixa.',
     },
     {
-      label: 'Selic no fim do período (% a.a.)',
-      value: selicFim, set: setSelicFim, min: 5, max: 15, step: 0.25, color: '#818cf8',
-      hint: `Nível que você espera que a Selic atinja ao final do financiamento. Quanto menor, menos vantajoso fica investir ao longo do tempo.`,
+      label: 'Selic no fim do período (% a.a.)', value: selicFim, set: setSelicFim, min: 5, max: 15, step: 0.25, color: '#818cf8',
+      hint: 'Nível que você espera que a Selic atinja ao final do financiamento. Quanto menor, menos vantajoso fica investir ao longo do tempo.',
     },
     {
-      label: 'TR hoje (% a.a.)',
-      value: trInicio, set: setTrInicio, min: 0, max: 4, step: 0.1, color: '#34d399',
-      hint: `A TR é uma correção monetária que incide sobre o saldo do seu financiamento todo mês — ela aumenta o custo real da dívida além da taxa de juros contratual.`,
+      label: 'TR hoje (% a.a.)', value: trInicio, set: setTrInicio, min: 0, max: 4, step: 0.1, color: '#34d399',
+      hint: 'A TR é uma correção monetária que incide sobre o saldo do financiamento todo mês — ela aumenta o custo real da dívida além da taxa contratual.',
     },
     {
-      label: 'TR no fim do período (% a.a.)',
-      value: trFim, set: setTrFim, min: 0, max: 3, step: 0.1, color: '#6ee7b7',
-      hint: `A TR tende a cair junto com a Selic. Defina o patamar esperado ao final do contrato.`,
+      label: 'TR no fim do período (% a.a.)', value: trFim, set: setTrFim, min: 0, max: 3, step: 0.1, color: '#6ee7b7',
+      hint: 'A TR tende a cair junto com a Selic. Defina o patamar esperado ao final do contrato.',
     },
     {
-      label: 'Tempo até a Selic começar a cair (meses)',
-      value: mesesHold, set: setMesesHold, min: 0, max: 36, step: 3, color: '#fbbf24',
+      label: 'Tempo até a Selic começar a cair (meses)', value: mesesHold, set: setMesesHold, min: 0, max: 36, step: 3, color: '#fbbf24',
       fmt: (v) => v === 0 ? 'já cai' : `${v} meses`,
       hint: mesesHold === 0
-        ? `A Selic começa a cair imediatamente, já no próximo mês.`
+        ? 'A Selic começa a cair imediatamente, já no próximo mês.'
         : `A Selic fica estável em ${selicInicio}% pelos próximos ${mesesHold} meses (até ${anoCaidaInicio}). Só depois começa a cair gradualmente até ${selicFim}% ao final do contrato. Isso simula o fato de que o Banco Central mantém os juros por um tempo antes de iniciar um ciclo de cortes.`,
     },
     {
-      label: 'Imposto de Renda sobre renda fixa (%)',
-      value: ir, set: setIr, min: 15, max: 22.5, step: 2.5, color: '#f87171',
-      hint: `O IR incide sobre o rendimento da renda fixa. Para investimentos acima de 2 anos, a alíquota é 15%. Para menos de 6 meses, é 22,5%. Como o horizonte aqui é longo, 15% é o mais adequado.`,
+      label: 'Imposto de Renda sobre renda fixa (%)', value: ir, set: setIr, min: 15, max: 22.5, step: 2.5, color: '#f87171',
+      hint: 'O IR incide sobre o rendimento da renda fixa. Para investimentos acima de 2 anos, a alíquota é 15%. Para menos de 6 meses, é 22,5%. Como o horizonte aqui é longo, 15% é o mais adequado.',
     },
   ];
 
@@ -160,15 +159,15 @@ export default function Simulador() {
     <div style={{ minHeight: '100vh', background: '#080c14', color: '#dde3f0', fontFamily: "'Georgia', serif" }}>
 
       {/* Header */}
-      <div style={{ background: 'linear-gradient(160deg, #0f1f3d 0%, #0a1628 60%, #080c14 100%)', padding: '36px 28px 28px', borderBottom: '1px solid #1a2744' }}>
-        <div style={{ fontSize: '10px', letterSpacing: '3px', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '6px', fontFamily: 'sans-serif' }}>
+      <div style={{ background: 'linear-gradient(160deg, #0f1f3d 0%, #0a1628 60%, #080c14 100%)', padding: '36px 28px 32px', borderBottom: '1px solid #1a2744' }}>
+        <div style={{ fontSize: '10px', letterSpacing: '3px', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '8px', fontFamily: 'sans-serif' }}>
           Simulador de Financiamento Imobiliário
         </div>
-        <h1 style={{ fontSize: 'clamp(20px, 4vw, 32px)', fontWeight: '400', margin: '0 0 6px', letterSpacing: '-0.5px' }}>
+        <h1 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: '400', margin: '0 0 12px', letterSpacing: '-0.5px' }}>
           Vale mais amortizar ou investir?
         </h1>
         <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0, fontFamily: 'sans-serif', lineHeight: '1.65', maxWidth: '580px' }}>
-          Se você tem o valor equivalente ao saldo devedor disponível, o que compensa mais: quitar a dívida hoje ou manter investido na Selic pagando as parcelas? Informe os dados do contrato e simule diferentes cenários de juros.
+          Se você tem o valor equivalente ao saldo do seu financiamento disponível, o que compensa mais: quitar a dívida hoje ou manter o dinheiro investido na Selic pagando as parcelas normalmente? Informe os dados do contrato e simule diferentes trajetórias de juros.
         </p>
       </div>
 
@@ -178,6 +177,9 @@ export default function Simulador() {
         <div style={{ background: '#0d1526', border: '1px solid #1a2744', borderRadius: '8px', padding: '18px', marginBottom: '20px' }}>
           <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#3b82f6', textTransform: 'uppercase', marginBottom: '4px', fontFamily: 'sans-serif' }}>
             Passo 1 — Dados do seu contrato
+          </div>
+          <div style={{ fontSize: '12px', color: '#475569', fontFamily: 'sans-serif', marginBottom: '14px' }}>
+            Encontre essas informações no extrato do seu banco (DDC ou demonstrativo de saldo devedor)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
             <div>
@@ -197,14 +199,16 @@ export default function Simulador() {
               <input type="number" value={parcelasRestantes} onChange={(e) => setParcelasRestantes(parseInt(e.target.value) || 1)} style={INPUT_STYLE} />
             </div>
           </div>
-          <div style={{ marginTop: '10px', fontSize: '11px', color: '#334155', fontFamily: 'sans-serif' }}>
+          <div style={{ marginTop: '12px', fontSize: '11px', color: '#334155', fontFamily: 'sans-serif' }}>
             ⚠️ Informe apenas a taxa contratual, sem TR — ela é adicionada separadamente nos sliders abaixo, pois varia ao longo do tempo junto com a Selic.
           </div>
         </div>
 
         {/* Presets */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#475569', textTransform: 'uppercase', marginBottom: '8px', fontFamily: 'sans-serif' }}>Passo 2 — Cenário de juros</div>
+          <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#475569', textTransform: 'uppercase', marginBottom: '8px', fontFamily: 'sans-serif' }}>
+            Passo 2 — Cenário de juros
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
             {PRESETS.map((p, i) => (
               <button key={p.label} onClick={() => applyPreset(i)} style={{
@@ -222,7 +226,9 @@ export default function Simulador() {
 
         {/* Sliders */}
         <div style={{ background: '#0d1526', border: '1px solid #1a2744', borderRadius: '8px', padding: '18px', marginBottom: '20px' }}>
-          <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#475569', textTransform: 'uppercase', marginBottom: '14px', fontFamily: 'sans-serif' }}>Ajuste fino da trajetória de juros</div>
+          <div style={{ fontSize: '10px', letterSpacing: '2px', color: '#475569', textTransform: 'uppercase', marginBottom: '14px', fontFamily: 'sans-serif' }}>
+            Ajuste fino da trajetória de juros
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             {sliders.map((s) => (
               <div key={s.label}>
@@ -249,31 +255,67 @@ export default function Simulador() {
         <div style={{
           background: vantagem ? 'linear-gradient(135deg, #052e16 0%, #064e3b 100%)' : 'linear-gradient(135deg, #450a0a 0%, #7c2d12 100%)',
           border: `1px solid ${vantagem ? '#16a34a' : '#b91c1c'}`,
-          borderRadius: '8px', padding: '22px', marginBottom: '20px',
-          display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+          borderRadius: '8px', padding: '24px', marginBottom: '20px',
         }}>
-          <div>
-            <div style={{ fontSize: '10px', letterSpacing: '2px', color: vantagem ? '#4ade80' : '#fca5a5', textTransform: 'uppercase', marginBottom: '4px', fontFamily: 'sans-serif' }}>
-              {vantagem ? '✓ Vale mais investir' : '✗ Vale mais amortizar'}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+            <div>
+              <div style={{ fontSize: '10px', letterSpacing: '2px', color: vantagem ? '#4ade80' : '#fca5a5', textTransform: 'uppercase', marginBottom: '4px', fontFamily: 'sans-serif' }}>
+                {vantagem ? '✓ Vale mais investir' : '✗ Vale mais amortizar'}
+              </div>
+              <div style={{ fontSize: 'clamp(26px, 5vw, 42px)', fontWeight: '300', letterSpacing: '-1px', color: '#fff' }}>
+                {vantagem ? '+' : '-'}{formatBRL(resultado.diferencaFinal)}
+              </div>
+              <div style={{ fontSize: '12px', color: vantagem ? '#86efac' : '#fca5a5', fontFamily: 'sans-serif', marginTop: '2px' }}>
+                {vantagem ? 'sobra ao final do período — investir é a melhor opção' : 'o fundo se esgota antes do fim — amortizar poupa mais'}
+              </div>
             </div>
-            <div style={{ fontSize: 'clamp(26px, 5vw, 42px)', fontWeight: '300', letterSpacing: '-1px', color: '#fff' }}>
-              {vantagem ? '+' : '-'}{formatBRL(resultado.diferencaFinal)}
-            </div>
-            <div style={{ fontSize: '12px', color: vantagem ? '#86efac' : '#fca5a5', fontFamily: 'sans-serif', marginTop: '2px' }}>
-              {vantagem ? 'sobra ao final do período — investir é a melhor opção' : 'o fundo se esgota antes do fim — amortizar poupa mais'}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+              {[
+                { label: 'Custo médio do financiamento', value: `${resultado.custoMedioFin}% a.a.`, color: '#f87171' },
+                { label: 'Selic líquida média', value: `${resultado.selicLiquidaMedia}% a.a.`, color: '#34d399' },
+                { label: 'Total juros + TR a pagar', value: formatBRL(resultado.totalJurosFin), color: '#fb923c' },
+              ].map((m) => (
+                <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontFamily: 'sans-serif', fontSize: '12px' }}>
+                  <span style={{ color: '#64748b' }}>{m.label}</span>
+                  <span style={{ color: m.color, fontWeight: '700' }}>{m.value}</span>
+                </div>
+              ))}
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
-            {[
-              { label: 'Custo médio do financiamento', value: `${resultado.custoMedioFin}% a.a.`, color: '#f87171' },
-              { label: 'Selic líquida média', value: `${resultado.selicLiquidaMedia}% a.a.`, color: '#34d399' },
-              { label: 'Total juros + TR a pagar', value: formatBRL(resultado.totalJurosFin), color: '#fb923c' },
-            ].map((m) => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontFamily: 'sans-serif', fontSize: '12px' }}>
-                <span style={{ color: '#64748b' }}>{m.label}</span>
-                <span style={{ color: m.color, fontWeight: '700' }}>{m.value}</span>
-              </div>
-            ))}
+
+          {/* Narrative */}
+          <div style={{
+            padding: '16px 18px',
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: '6px',
+            fontSize: '13px',
+            color: vantagem ? '#a7f3d0' : '#fde68a',
+            fontFamily: 'sans-serif',
+            lineHeight: '1.8',
+            borderLeft: `3px solid ${vantagem ? '#4ade80' : '#f87171'}`,
+          }}>
+            {vantagem ? (
+              <>
+                Investindo <strong style={{color:'#fff'}}>{formatBRL(saldoDevedor)}</strong> hoje,
+                seu fundo cresce para aproximadamente <strong style={{color:'#fff'}}>{formatBRL(resultado.fundoBruto)}</strong> em{' '}
+                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong> — rendendo a Selic líquida sem sacar nada.
+                Ao mesmo tempo, seu financiamento geraria <strong style={{color:'#fff'}}>{formatBRL(resultado.totalJurosFin)}</strong> em
+                juros + TR nesse período. Como o fundo rende mais do que a dívida custa,
+                sobram <strong style={{color:'#4ade80'}}>{formatBRL(resultado.diferencaFinal)}</strong> depois
+                de pagar todas as parcelas.{' '}
+                <strong style={{color:'#4ade80'}}>Investir é a melhor decisão nesse cenário.</strong>
+              </>
+            ) : (
+              <>
+                Investindo <strong style={{color:'#fff'}}>{formatBRL(saldoDevedor)}</strong> hoje,
+                seu fundo cresceria para aproximadamente <strong style={{color:'#fff'}}>{formatBRL(resultado.fundoBruto)}</strong> em{' '}
+                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong>. Porém, o total de parcelas
+                a pagar soma <strong style={{color:'#fff'}}>{formatBRL(resultado.totalParcelasPagas)}</strong> — mais
+                do que o fundo consegue gerar nesse cenário de juros. Quitar o financiamento hoje
+                economiza <strong style={{color:'#f87171'}}>{formatBRL(resultado.diferencaFinal)}</strong> no total.{' '}
+                <strong style={{color:'#f87171'}}>Amortizar é a melhor decisão nesse cenário.</strong>
+              </>
+            )}
           </div>
         </div>
 
@@ -338,7 +380,7 @@ export default function Simulador() {
 
         {/* Footer */}
         <div style={{ background: '#0a1220', border: '1px solid #141f33', borderRadius: '8px', padding: '16px', fontSize: '12px', lineHeight: '1.7', color: '#475569', fontFamily: 'sans-serif' }}>
-          <strong style={{ color: '#64748b' }}>Metodologia:</strong> O fundo começa com o saldo devedor informado, rende a Selic líquida mês a mês (com IR de {ir}%) e paga cada parcela SAC conforme o calendário. A Selic e TR variam linearmente do valor inicial ao final, com {mesesHold} meses de estabilidade antes de cair.
+          <strong style={{ color: '#64748b' }}>Como funciona:</strong> O simulador parte do princípio que você tem o valor do saldo devedor disponível. No cenário <strong style={{color:'#94a3b8'}}>investir</strong>, esse dinheiro rende a Selic líquida (descontado IR de {ir}%) e é usado mês a mês para pagar as parcelas do financiamento — o que sobrar ao final é o seu ganho. No cenário <strong style={{color:'#94a3b8'}}>amortizar</strong>, você quita hoje e economiza todos os juros futuros. A Selic e a TR declinam linearmente ao longo do prazo, com {mesesHold} meses de estabilidade antes de começar a cair.
         </div>
       </div>
     </div>
