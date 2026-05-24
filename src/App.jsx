@@ -177,6 +177,37 @@ export default function Simulador() {
     const totalParcelasPagas = amortizacaoMensal * total + totalJurosFin;
     const anos = Math.round(total / 12);
 
+    // Mês 1 fixed (for red scenario)
+    const sm1 = Math.pow(1 + selicCurve[0] / 100, 1/12) - 1;
+    const slm1 = sm1 * (1 - ir / 100);
+    const trm1 = Math.pow(1 + trCurve[0] / 100, 1/12) - 1;
+    const j1 = saldoDevedor * taxaMensalContrato;
+    const t1 = saldoDevedor * trm1;
+    const p1 = amortizacaoMensal + j1 + t1;
+    const r1 = saldoDevedor * slm1;
+    const mes1 = { rendimento: r1, parcela: p1, juros: j1, tr: t1, fundoAntes: saldoDevedor, fundoApos: saldoDevedor + r1 - p1 };
+
+    // Find first month where fund return >= installment (for green scenario)
+    let exMes = 1, exRendimento = 0, exParcela = 0, exJuros = 0, exTr = 0, exFundoAntes = saldoDevedor, exFundoApos = 0;
+    let tempSaldo = saldoDevedor;
+    let tempFundo = saldoDevedor;
+    for (let m = 1; m <= total; m++) {
+      const sm = Math.pow(1 + selicCurve[m-1] / 100, 1/12) - 1;
+      const slm = sm * (1 - ir / 100);
+      const trm = Math.pow(1 + trCurve[m-1] / 100, 1/12) - 1;
+      const j = tempSaldo * taxaMensalContrato;
+      const t = tempSaldo * trm;
+      const p = amortizacaoMensal + j + t;
+      const r = tempFundo * slm;
+      if (r >= p || m === total) {
+        exMes = m; exRendimento = r; exParcela = p; exJuros = j; exTr = t;
+        exFundoAntes = tempFundo; exFundoApos = tempFundo + r - p;
+        break;
+      }
+      tempSaldo = Math.max(0, tempSaldo - amortizacaoMensal + t);
+      tempFundo = tempFundo * (1 + slm) - p;
+    }
+
     return {
       fundoFinal: fundoInveste, fundoBruto, totalJurosFin, totalParcelasPagas, anos,
       vantagem: fundoInveste > 0,
@@ -184,6 +215,10 @@ export default function Simulador() {
       chartData, selicChartData,
       custoMedioFin: (taxaJurosAnual + trMedia).toFixed(2),
       selicLiquidaMedia: (((Math.pow(1 + selicMedia / 100, 1/12) - 1) * (1 - ir / 100)) * 12 * 100).toFixed(2),
+      exMes: { mes: exMes, rendimento: exRendimento, parcela: exParcela, juros: exJuros, tr: exTr, fundoAntes: exFundoAntes, fundoApos: exFundoApos },
+      mes1,
+
+
     };
   }, [saldoDevedor, amortizacaoMensal, taxaJurosAnual, parcelasRestantes, selicInicio, selicFim, trInicio, trFim, mesesHold, ir]);
 
@@ -368,23 +403,43 @@ export default function Simulador() {
             {vantagem ? (
               <>
                 Investindo <strong style={{color:'#fff'}}>{formatBRL(saldoDevedor)}</strong> hoje,
-                seu fundo cresce para aproximadamente <strong style={{color:'#fff'}}>{formatBRL(animatedFundoBruto)}</strong> em{' '}
-                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong> — rendendo a Selic líquida sem sacar nada.
-                Ao mesmo tempo, seu financiamento geraria <strong style={{color:'#fff'}}>{formatBRL(resultado.totalJurosFin)}</strong> em
-                juros + TR nesse período. Como o fundo rende mais do que a dívida custa,
-                sobram <strong style={{color:'#4ade80'}}>{formatBRL(animatedDiferenca)}</strong> depois
-                de pagar todas as parcelas.{' '}
+                o fundo rende a Selic líquida mas paga as parcelas do financiamento todo mês com saques.
+                Sem os saques, o dinheiro chegaria a <strong style={{color:'#fff'}}>{formatBRL(animatedFundoBruto)}</strong> em{' '}
+                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong> — mas como as parcelas são descontadas mensalmente,
+                o juro composto trabalha sobre um capital menor. Mesmo assim, o fundo resiste e ainda sobram{' '}
+                <strong style={{color:'#4ade80'}}>{formatBRL(animatedDiferenca)}</strong> depois de pagar todas as parcelas,
+                contra <strong style={{color:'#fff'}}>{formatBRL(resultado.totalJurosFin)}</strong> em juros + TR que você economizaria quitando hoje.{' '}
                 <strong style={{color:'#4ade80'}}>Investir é a melhor decisão nesse cenário.</strong>
+                <div style={{marginTop:'12px', padding:'10px 12px', background:'rgba(0,0,0,0.2)', borderRadius:'6px', fontSize:'12px', color:'#6ee7b7', lineHeight:'1.7'}}>
+                  <strong style={{color:'#a7f3d0', display:'block', marginBottom:'4px'}}>Exemplo — mês {resultado.exMes.mes} (quando o rendimento passa a superar a parcela):</strong>
+                  O fundo acumulado de <strong style={{color:'#fff'}}>{formatBRL(resultado.exMes.fundoAntes)}</strong> rende{' '}
+                  <strong style={{color:'#4ade80'}}>{formatBRL(resultado.exMes.rendimento)}</strong> líquidos nesse mês.
+                  A parcela é <strong style={{color:'#f87171'}}>{formatBRL(resultado.exMes.parcela)}</strong> (amortização{' '}
+                  {formatBRL(amortizacaoMensal)} + juros {formatBRL(resultado.exMes.juros)} + TR {formatBRL(resultado.exMes.tr)}).
+                  O fundo termina o mês com <strong style={{color:'#fff'}}>{formatBRL(resultado.exMes.fundoApos)}</strong> —{' '}
+                  a partir daqui o rendimento supera a parcela e o fundo começa a crescer consistentemente até o final do contrato.
+
+                </div>
               </>
             ) : (
               <>
                 Investindo <strong style={{color:'#fff'}}>{formatBRL(saldoDevedor)}</strong> hoje,
-                seu fundo cresceria para aproximadamente <strong style={{color:'#fff'}}>{formatBRL(animatedFundoBruto)}</strong> em{' '}
-                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong>. Porém, o total de parcelas
-                a pagar soma <strong style={{color:'#fff'}}>{formatBRL(resultado.totalParcelasPagas)}</strong> — mais
-                do que o fundo consegue gerar nesse cenário de juros. Quitar o financiamento hoje
-                economiza <strong style={{color:'#f87171'}}>{formatBRL(animatedDiferenca)}</strong> no total.{' '}
+                o fundo rende a Selic líquida mas precisa sacar as parcelas todo mês para pagar o financiamento.
+                Sem os saques, o dinheiro chegaria a <strong style={{color:'#fff'}}>{formatBRL(animatedFundoBruto)}</strong> em{' '}
+                <strong style={{color:'#fff'}}>{resultado.anos} anos</strong> — mas os saques mensais consomem o capital
+                mais rápido do que ele consegue render nesse cenário de juros baixos. O fundo se esgota antes
+                do fim do contrato, com um déficit de <strong style={{color:'#f87171'}}>{formatBRL(animatedDiferenca)}</strong>.
+                Quitar hoje economiza esse valor em juros + TR.{' '}
                 <strong style={{color:'#f87171'}}>Amortizar é a melhor decisão nesse cenário.</strong>
+                <div style={{marginTop:'12px', padding:'10px 12px', background:'rgba(0,0,0,0.2)', borderRadius:'6px', fontSize:'12px', color:'#fde68a', lineHeight:'1.7'}}>
+                  <strong style={{color:'#fef3c7', display:'block', marginBottom:'4px'}}>Exemplo — mês 1:</strong>
+                  O fundo de <strong style={{color:'#fff'}}>{formatBRL(resultado.mes1.fundoAntes)}</strong> rende{' '}
+                  <strong style={{color:'#4ade80'}}>{formatBRL(resultado.mes1.rendimento)}</strong> líquidos.
+                  A parcela é <strong style={{color:'#f87171'}}>{formatBRL(resultado.mes1.parcela)}</strong> (amortização{' '}
+                  {formatBRL(amortizacaoMensal)} + juros {formatBRL(resultado.mes1.juros)} + TR {formatBRL(resultado.mes1.tr)}).
+                  O fundo termina com <strong style={{color:'#fff'}}>{formatBRL(resultado.mes1.fundoApos)}</strong> —{' '}
+                  a parcela supera o rendimento desde o início. Com a Selic caindo ao longo do tempo, esse desequilíbrio se agrava e o fundo se esgota antes do fim do contrato.
+                </div>
               </>
             )}
           </div>
@@ -452,7 +507,7 @@ export default function Simulador() {
 
         {/* Footer */}
         <div style={{ background: '#0a1220', border: '1px solid #141f33', borderRadius: '8px', padding: '16px', fontSize: '12px', lineHeight: '1.7', color: '#475569', fontFamily: 'sans-serif' }}>
-          <strong style={{ color: '#64748b' }}>Como funciona:</strong> O simulador parte do princípio que você tem o valor do saldo devedor disponível. No cenário <strong style={{color:'#94a3b8'}}>investir</strong>, esse dinheiro rende a Selic líquida (descontado IR de {ir}%) e é usado mês a mês para pagar as parcelas — o que sobrar ao final é o seu ganho. No cenário <strong style={{color:'#94a3b8'}}>amortizar</strong>, você quita hoje e economiza todos os juros futuros. A Selic e a TR declinam linearmente ao longo do prazo, com {mesesHold} meses de estabilidade antes de começar a cair.
+          <strong style={{ color: '#64748b' }}>Como funciona:</strong> O simulador assume que você tem o valor do saldo devedor disponível para investir. No cenário <strong style={{color:'#94a3b8'}}>investir</strong>, esse dinheiro é aplicado na Selic líquida (IR de {ir}%) e a cada mês uma parcela é sacada do fundo para pagar o financiamento — o juro composto existe, mas trabalha sobre um capital que encolhe a cada saque. O que sobrar ao final é o ganho líquido. No cenário <strong style={{color:'#94a3b8'}}>amortizar</strong>, você quita hoje e economiza todos os juros futuros. O valor "seu fundo cresce para R$ X" na análise acima mostra o potencial sem saques — o número que realmente importa é o que sobra depois de pagar todas as parcelas. A Selic e a TR declinam linearmente ao longo do prazo, com {mesesHold} meses de estabilidade antes de começar a cair.
         </div>
       </div>
     </div>
