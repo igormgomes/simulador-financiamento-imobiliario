@@ -294,7 +294,7 @@ export default function Simulador() {
               <input type="number" value={amortizacaoMensal} onChange={(e) => setAmortizacaoMensal(parseFloat(e.target.value) || 0)} style={INPUT_STYLE} />
             </div>
             <div>
-              <label style={LABEL_STYLE}>Taxa de juros do contrato (% a.a.)</label>
+              <label style={LABEL_STYLE}>Juros do contrato (% a.a.)</label>
               <input type="number" step="0.01" value={taxaJurosAnual} onChange={(e) => setTaxaJurosAnual(parseFloat(e.target.value) || 0)} style={INPUT_STYLE} />
             </div>
             <div>
